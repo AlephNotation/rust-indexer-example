@@ -1,15 +1,21 @@
 #![deny(missing_docs)]
 #![allow(warnings)]
 
-//! GO AWAY ERRORS
+//! Simple iterative solution for PageRank
 //! 
+//! This is an iterative graph based solution rather than the closed analytical form
+//! Graph approaches are nice because the changes needed to make them parallelizable
+//! are simper than trying to do distributes matrix calculations
+//! 
+//! Note here that to do a naive matrix calculation requires to hold the matrix in memory
+//! and then perform some sort of SGD based solution
 use std::collections::HashMap;
 use std::default::Default;
 use std::hash::Hash;
 
 #[derive(Clone)]
 struct GraphNode<T>
-where
+where // creating bounds for this struct
     T: Eq + Hash + Clone,
 {
     node: T,
@@ -19,6 +25,7 @@ where
 }
 
 /// Pagerank bby
+/// note here we are creating a graph with generic types
 pub struct Pagerank<T>
 where 
     T: Eq + Hash + Clone,
@@ -37,7 +44,7 @@ where
     /// Create a new instance
     pub fn new() -> Pagerank<T> {
         Pagerank::<T> {
-            damping: 0.85,
+            damping: 0.85, // magic number for the random surfer
             nodes: Vec::new(),
             edges: 0,
             node_positions: HashMap::<T, usize>::new(),
@@ -49,7 +56,7 @@ where
     pub fn set_damping_factor(
         &mut self,
         factor: u8,
-    ) -> Result<(), String> {
+    ) -> Result<(), String> { 
         if factor >= 100 {
             return Err("{val} needs to be bellow 100".to_string());
         }
@@ -64,7 +71,7 @@ where
     pub fn get_or_create_node(&mut self, node: T) -> usize {
         match self.node_positions.get(&node) { 
             Some(&value) => value,
-            _ => {
+            _ => { // if the node doesn't exist, make it
                 let id = self.nodes.len();
                 self.nodes.push(GraphNode::<T>{
                     node: node.clone(),
@@ -83,6 +90,7 @@ where
     pub fn add_edge(&mut self, source: T, target: T) {
         let source = self.get_or_create_node(source);
         let target = self.get_or_create_node(target);
+        // this is a directed graph
         self.nodes[source].outgoing_edges += 1;
         self.nodes[target].incoming_edges.push(source);
         self.edges +=1;
@@ -127,7 +135,7 @@ where
         total
     }
 
-    /// f
+    /// 
     pub fn calculate_step(&mut self) -> f64 {
         let mut current_iter = self.nodes.clone();
 
@@ -146,10 +154,10 @@ where
                         nodes[*node].score / nodes[*node].outgoing_edges as f64
                     })
                     .sum::<f64>();
-
+                    // 
                     current_iter[id].score = (1f64 - self.damping) + (self.damping * score);
             })
-            .for_each(drop);
+            .for_each(drop); // cleanup
 
         let convergence: f64 = self
             .nodes
@@ -183,17 +191,30 @@ where
         self.calculate_with_convergence(0.01)
     }
     
-    /// getter for number of nodes
+    /// Get count of nodes in graph
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
 
-    ///
+    /// Return nodes sorted by pagerank
+    pub fn nodes(&self) -> Vec<(&T, f64)> {
+        let mut nodes = self
+            .nodes
+            .iter()
+            .map(|node| (&node.node, node.score))
+            .collect::<Vec<(&T, f64)>>();
+        
+        nodes.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        nodes
+    }
+
+    /// Get count of edges in graph
     pub fn len_node(&self) -> usize {
         self.edges
     }
 
-    ///
+    /// Is the graph empty?
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
@@ -212,6 +233,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    /// Yeah im aware i need more test coverage
     use std::ops::Add;
 
     use crate::Pagerank;
@@ -232,6 +254,111 @@ mod tests {
         assert_eq!(1, pagerank.len())
     }
 
-    
-    
+    #[test]
+    fn test_edges(){
+        let mut pagerank = Pagerank::<&str>::new();
+        pagerank.add_edge("aaa", "bbb");
+        // gonna pack together multiple tests here
+
+        // test one edge
+        assert_eq!(Some(1), pagerank.get_incoming_edges("bbb"));
+        assert_eq!(Some(0), pagerank.get_incoming_edges("aaa")); // aaa has no incoming edges
+
+        // test two edges
+        pagerank.add_edge("ccc", "bbb");
+        assert_eq!(Some(2), pagerank.get_incoming_edges("bbb"));
+        assert_eq!(Some(0), pagerank.get_outgoing_edges("bbb"))
+    }
+
+    #[test]
+    fn test_score(){
+        let mut pagerank = Pagerank::<&str>::new();
+        pagerank.add_edge("aaa", "bbb");
+        pagerank.add_edge("bbb", "ccc");
+        pagerank.add_edge("ddd", "aaa");
+        pagerank.add_edge("eee", "ddd");
+
+        // default score
+        assert_eq!(15_i64, (pagerank.get_score("aaa").expect("float") * 100_f64) as i64); 
+
+        // assert default score is shared across nodes
+        assert_eq!(pagerank.get_score("aaa"), pagerank.get_score("ddd")); 
+    }
+
+    #[test]
+    fn test_iteration() {
+        let mut pagerank = Pagerank::<&str>::new();
+        pagerank.add_edge("aaa", "bbb");
+        pagerank.add_edge("bbb", "ccc");
+        pagerank.add_edge("ddd", "aaa");
+        pagerank.add_edge("eee", "ddd");
+
+        pagerank.calculate_step();
+        assert_eq!(
+            vec!["aaa", "bbb", "ccc", "ddd", "eee"],
+            pagerank.nodes()
+                .iter()
+                .map(|(node, _)| **node)
+                .collect::<Vec<&str>>()
+        );
+    }
+
+    #[test]
+    fn test_full_run() {
+        let mut pagerank = Pagerank::<&str>::new();
+        pagerank.add_edge("aaa", "bbb");
+        pagerank.add_edge("bbb", "aaa");
+        pagerank.add_edge("ddd", "aaa");
+        pagerank.add_edge("eee", "ddd");
+
+        assert_eq!(16, pagerank.calculate());
+
+        assert_eq!(
+            vec!["aaa", "bbb", "ddd", "eee"],
+            pagerank.nodes()
+                .iter()
+                .map(|(node, _)| **node)
+                .collect::<Vec<&str>>()
+        );
+    }
+    #[test]
+    /// https://en.wikipedia.org/wiki/PageRank#/media/File:PageRanks-Example.svg
+    fn test_pagerank_example() {
+        let mut pr = Pagerank::new();
+        let edges = vec![
+            ("D", "A"),
+            ("D", "B"),
+            ("B", "C"),
+            ("C", "B"),
+            ("E", "B"),
+            ("E", "F"),
+            ("F", "B"),
+            ("F", "E"),
+            ("G", "B"),
+            ("G", "E"),
+            ("H", "B"),
+            ("H", "E"),
+            ("I", "B"),
+            ("I", "E"),
+            ("J", "E"),
+            ("K", "E"),
+        ];
+
+        edges
+            .iter()
+            .map(|(l1, l2)| pr.add_edge(*l1, *l2))
+            .for_each(drop);
+
+        pr.calculate();
+
+        assert_eq!(
+            vec![
+                "B", "C", "E", "F", "A", "D", "G", "H", "I", "J", "K"
+            ],
+            pr.nodes()
+                .iter()
+                .map(|(node, _)| **node)
+                .collect::<Vec<&str>>()
+        );
+    }  
 }
