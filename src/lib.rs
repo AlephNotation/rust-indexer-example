@@ -239,6 +239,14 @@ mod tests {
     use crate::Pagerank;
 
     #[test]
+    fn test_set_damping() {
+        let mut pagerank = Pagerank::<&str>::new();
+        pagerank.set_damping_factor(22);
+
+        assert_eq!(0.22, pagerank.damping)
+    }
+
+    #[test]
     fn test_three_nodes_are_created() {
         let mut pagerank = Pagerank::<&str>::new();
         pagerank.add_edge("foo", "bar");
