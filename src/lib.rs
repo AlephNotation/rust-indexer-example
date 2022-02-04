@@ -249,8 +249,8 @@ mod tests {
     #[test]
     fn test_three_nodes_are_created() {
         let mut pagerank = Pagerank::<&str>::new();
-        pagerank.add_edge("foo", "bar");
-        pagerank.add_edge("foo", "bat");
+        pagerank.add_edge("aaa", "bbb");
+        pagerank.add_edge("bbb", "ccc");
         assert_eq!(3, pagerank.len())
     }
 
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn test_only_one_node_created() {
         let mut pagerank = Pagerank::<&str>::new();
-        pagerank.add_edge("foo", "foo");
+        pagerank.add_edge("aaa", "aaa");
         assert_eq!(1, pagerank.len())
     }
 
