@@ -1,4 +1,4 @@
-use rusty_index::Pagerank;
+/* use rusty_index::Pagerank;
 use std::io::{self, BufRead};
 use std::time::Instant;
 
@@ -29,3 +29,7 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
+
+*/
+use rusty_index::Pagerank;
+fn main(){}
